@@ -1,0 +1,367 @@
+import React, { useState } from 'react';
+import { Calendar, Briefcase, Clock, AlertCircle, Search } from 'lucide-react';
+
+export default function IhbarHesaplama() {
+  const [baslamaTarihi, setBaslamaTarihi] = useState('');
+  const [bildirimTarihi, setBildirimTarihi] = useState('');
+  const [isAramaToplu, setIsAramaToplu] = useState(false);
+  const [gunlukCalisma, setGunlukCalisma] = useState(9);
+  const [sonuc, setSonuc] = useState(null);
+
+  // 2026 Resmi Tatiller (Türkiye)
+  const resmiTatiller = [
+    new Date(2026, 0, 1),   // Yılbaşı
+    new Date(2026, 3, 23),  // 23 Nisan
+    new Date(2026, 4, 1),   // 1 Mayıs
+    new Date(2026, 4, 19),  // 19 Mayıs
+    new Date(2026, 6, 15),  // 15 Temmuz
+    new Date(2026, 7, 30),  // 30 Ağustos
+    new Date(2026, 9, 29),  // 29 Ekim
+    // Ramazan ve Kurban Bayramı tarihleri yıllık güncellenmeli
+    new Date(2026, 2, 30),  // Ramazan Bayramı 1
+    new Date(2026, 2, 31),  // Ramazan Bayramı 2
+    new Date(2026, 3, 1),   // Ramazan Bayramı 3
+    new Date(2026, 5, 6),   // Kurban Bayramı 1
+    new Date(2026, 5, 7),   // Kurban Bayramı 2
+    new Date(2026, 5, 8),   // Kurban Bayramı 3
+    new Date(2026, 5, 9),   // Kurban Bayramı 4
+  ];
+
+  const tatilMi = (tarih) => {
+    // Hafta sonu kontrolü
+    const gun = tarih.getDay();
+    if (gun === 0 || gun === 6) return true;
+
+    // Resmi tatil kontrolü
+    return resmiTatiller.some(tatil => 
+      tatil.getDate() === tarih.getDate() &&
+      tatil.getMonth() === tarih.getMonth() &&
+      tatil.getFullYear() === tarih.getFullYear()
+    );
+  };
+
+  const isgununuEkle = (baslangic, gunSayisi) => {
+    const tarih = new Date(baslangic);
+    let eklenenGun = 0;
+
+    while (eklenenGun < gunSayisi) {
+      tarih.setDate(tarih.getDate() + 1);
+      if (!tatilMi(tarih)) {
+        eklenenGun++;
+      }
+    }
+
+    return tarih;
+  };
+
+  const hesapla = () => {
+    if (!baslamaTarihi || !bildirimTarihi) {
+      alert('Lütfen tüm tarihleri doldurun');
+      return;
+    }
+
+    const baslama = new Date(baslamaTarihi);
+    const bildirim = new Date(bildirimTarihi);
+
+    if (bildirim < baslama) {
+      alert('Bildirim tarihi, işe başlama tarihinden önce olamaz');
+      return;
+    }
+
+    // Kıdem hesaplama (ay cinsinden)
+    const kidemAy = Math.floor((bildirim - baslama) / (1000 * 60 * 60 * 24 * 30.44));
+    const kidemYil = Math.floor(kidemAy / 12);
+    const kalanAy = kidemAy % 12;
+
+    // İhbar süresi belirleme (İş Kanunu'na göre)
+    let ihbarHafta;
+    if (kidemAy < 6) {
+      ihbarHafta = 2; // 6 aydan az: 2 hafta
+    } else if (kidemAy < 18) {
+      ihbarHafta = 4; // 6 ay - 1.5 yıl: 4 hafta
+    } else if (kidemAy < 36) {
+      ihbarHafta = 6; // 1.5 - 3 yıl: 6 hafta
+    } else {
+      ihbarHafta = 8; // 3 yıldan fazla: 8 hafta
+    }
+
+    const ihbarGun = ihbarHafta * 7;
+
+    // İhbar süresi içindeki iş günlerini hesapla
+    let ihbarTarih = new Date(bildirim);
+    let ihbarSuresindekiIsGunu = 0;
+    
+    for (let i = 0; i < ihbarGun; i++) {
+      ihbarTarih.setDate(ihbarTarih.getDate() + 1);
+      if (!tatilMi(ihbarTarih)) {
+        ihbarSuresindekiIsGunu++;
+      }
+    }
+
+    // İş arama izni hesaplama
+    let isAramaGun = 0;
+    let isAramaSaat = 0;
+    let sonCalismaGunu;
+
+    if (isAramaToplu) {
+      // Günlük 2 saat * ihbar süresindeki İŞ GÜNÜ sayısı
+      isAramaSaat = ihbarSuresindekiIsGunu * 2;
+      // İş arama izni gün sayısı (günlük çalışma saatine böl ve 0.5'e göre yuvarla)
+      const hesaplananGun = isAramaSaat / gunlukCalisma;
+      isAramaGun = (hesaplananGun % 1) >= 0.5 ? Math.ceil(hesaplananGun) : Math.floor(hesaplananGun);
+      
+      // Son çalışma günü = bildirim + (ihbar TAKVİM günleri - iş arama günleri)
+      const sonTarih = new Date(bildirim);
+      sonTarih.setDate(sonTarih.getDate() + (ihbarGun - isAramaGun));
+      sonCalismaGunu = sonTarih;
+    } else {
+      // Toplu kullanılmıyorsa normal hesaplama
+      const sonTarih = new Date(bildirim);
+      sonTarih.setDate(sonTarih.getDate() + ihbarGun);
+      sonCalismaGunu = sonTarih;
+      isAramaSaat = ihbarSuresindekiIsGunu * 2;
+    }
+
+    // İş günü sayısını hesapla
+    let toplamIsGunu = 0;
+    let tempTarih = new Date(bildirim);
+    const sonTarih = new Date(sonCalismaGunu);
+    
+    while (tempTarih <= sonTarih) {
+      if (!tatilMi(tempTarih)) {
+        toplamIsGunu++;
+      }
+      tempTarih.setDate(tempTarih.getDate() + 1);
+    }
+
+    setSonuc({
+      kidemYil,
+      kalanAy,
+      toplamKidemAy: kidemAy,
+      ihbarHafta,
+      ihbarGun,
+      ihbarSuresindekiIsGunu,
+      isAramaSaat,
+      isAramaGun,
+      toplamIsGunu,
+      sonCalismaGunu: sonCalismaGunu.toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      }),
+      bildirimTarihiFormatli: bildirim.toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    });
+  };
+
+  const temizle = () => {
+    setBaslamaTarihi('');
+    setBildirimTarihi('');
+    setIsAramaToplu(false);
+    setGunlukCalisma(9);
+    setSonuc(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          {/* Başlık */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <Briefcase className="w-16 h-16 text-indigo-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              İhbar Süresi Hesaplama
+            </h1>
+            <p className="text-gray-600">
+              Personel çıkışlarında ihbar süresini ve son çalışma gününü hesaplayın
+            </p>
+          </div>
+
+          {/* Form */}
+          <div className="space-y-6">
+            <div>
+              <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+                <Calendar className="w-4 h-4 mr-2" />
+                İşe Başlama Tarihi
+              </label>
+              <input
+                type="date"
+                value={baslamaTarihi}
+                onChange={(e) => setBaslamaTarihi(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+                <Clock className="w-4 h-4 mr-2" />
+                Çıkış Bildirimi Tarihi
+              </label>
+              <input
+                type="date"
+                value={bildirimTarihi}
+                onChange={(e) => setBildirimTarihi(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <label className="flex items-center text-sm font-semibold text-gray-700 mb-3">
+                <Search className="w-4 h-4 mr-2" />
+                İş Arama İzni Ayarları
+              </label>
+              
+              <div className="space-y-3">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isAramaToplu}
+                    onChange={(e) => setIsAramaToplu(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="ml-3 text-gray-700">
+                    İş arama izni toplu kullanılacak
+                  </span>
+                </label>
+
+                {isAramaToplu && (
+                  <div>
+                    <label className="text-sm text-gray-700 mb-1 block">
+                      Günlük Çalışma Saati
+                    </label>
+                    <input
+                      type="number"
+                      value={gunlukCalisma}
+                      onChange={(e) => setGunlukCalisma(Number(e.target.value))}
+                      min="1"
+                      max="24"
+                      className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <span className="ml-2 text-sm text-gray-600">saat/gün</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={hesapla}
+                className="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+              >
+                Hesapla
+              </button>
+              <button
+                onClick={temizle}
+                className="px-6 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Temizle
+              </button>
+            </div>
+          </div>
+
+          {/* Sonuç */}
+          {sonuc && (
+            <div className="mt-8 space-y-4">
+              <div className="bg-indigo-50 rounded-xl p-6 border-2 border-indigo-200">
+                <h2 className="text-xl font-bold text-indigo-900 mb-4">
+                  Hesaplama Sonuçları
+                </h2>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                    <span className="text-gray-700 font-medium">Toplam Kıdem:</span>
+                    <span className="text-indigo-900 font-bold">
+                      {sonuc.kidemYil} yıl {sonuc.kalanAy} ay
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                    <span className="text-gray-700 font-medium">İhbar Süresi:</span>
+                    <span className="text-indigo-900 font-bold">
+                      {sonuc.ihbarHafta} hafta ({sonuc.ihbarGun} takvim günü)
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                    <span className="text-gray-700 font-medium">İhbar Süresindeki İş Günü:</span>
+                    <span className="text-indigo-900 font-bold">
+                      {sonuc.ihbarSuresindekiIsGunu} gün
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                    <span className="text-gray-700 font-medium">İş Arama İzni:</span>
+                    <span className="text-indigo-900 font-bold">
+                      {sonuc.isAramaSaat} saat
+                      {isAramaToplu && ` (${sonuc.isAramaGun} iş günü)`}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                    <span className="text-gray-700 font-medium">Bildirim Tarihi:</span>
+                    <span className="text-indigo-900 font-bold">
+                      {sonuc.bildirimTarihiFormatli}
+                    </span>
+                  </div>
+
+                  {isAramaToplu && (
+                    <div className="flex justify-between items-center py-2 border-b border-indigo-200">
+                      <span className="text-gray-700 font-medium">Çalışılacak İş Günü:</span>
+                      <span className="text-indigo-900 font-bold">
+                        {sonuc.toplamIsGunu} gün
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mt-4 pt-4 border-t-2 border-indigo-300">
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700 font-semibold text-lg">
+                          Son Çalışma Günü:
+                        </span>
+                        <span className="text-indigo-600 font-bold text-xl">
+                          {sonuc.sonCalismaGunu}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bilgilendirme */}
+              <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                <div className="flex items-start">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-amber-800">
+                    <p className="font-semibold mb-1">İş Kanunu Bilgilendirme:</p>
+                    <ul className="list-disc list-inside space-y-1 text-amber-700">
+                      <li>İhbar süreleri: 6 aydan az (2 hafta), 6 ay-1.5 yıl (4 hafta), 1.5-3 yıl (6 hafta), 3+ yıl (8 hafta)</li>
+                      <li>İhbar süresi takvim günü olarak hesaplanır (hafta sonu dahil)</li>
+                      <li>İş arama izni sadece iş günleri üzerinden hesaplanır (Pzt-Cum)</li>
+                      <li>0.5 ve üzeri yukarı, altı aşağı yuvarlanır</li>
+                      {isAramaToplu && (
+                        <li className="font-semibold">Toplu kullanımda: {sonuc.ihbarSuresindekiIsGunu} iş günü × 2 saat = {sonuc.isAramaSaat} saat ÷ {gunlukCalisma} saat/gün = {(sonuc.isAramaSaat / gunlukCalisma).toFixed(2)} → {sonuc.isAramaGun} gün düşülmüştür</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6 text-gray-600 text-sm">
+          <p>Bu hesaplama 4857 sayılı İş Kanunu'na göre yapılmaktadır.</p>
+          <p className="mt-1 text-xs">Hafta sonları ve 2026 resmi tatilleri hesaplamaya dahildir.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
